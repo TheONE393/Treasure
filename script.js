@@ -102,13 +102,14 @@ loginForm.addEventListener("submit", async (e) => {
 
   // Local fallback (offline mode)
   await teamsLoaded;
+  // normalize for robust matching (allow Admin/ADMIN etc.)
+  const teamNameLower = (teamName || '').toString().trim().toLowerCase();
   // If teams.json contains an admin entry and credentials match, redirect to admin panel
-  if (teamName === 'admin' && teams && teams[teamName] && teams[teamName].password === password) {
+  if (teamNameLower === 'admin' && teams && teams['admin'] && teams['admin'].password === password) {
     // Admin HTML is a static page on GitHub Pages — redirect there.
     window.location.href = API_BASE + '/admin.html';
     return;
   }
-
   if (teams && teams[teamName] && teams[teamName].password === password) {
     currentTeam = teamName;
     loginContainer.classList.add("hidden");
