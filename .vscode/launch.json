@@ -1,0 +1,20 @@
+{
+  // VS Code launch configuration to run the Flask app using the system 'python'
+  // This avoids referencing a workspace .venv interpreter path that may not exist.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Treasure Hunt (Python)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        // set PORT or ADMIN_PASSWORD here if you want when launching from VS Code
+        // "ADMIN_PASSWORD": "secret123",
+        // "PORT": "8080"
+      }
+    }
+  ]
+}

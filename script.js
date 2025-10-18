@@ -214,8 +214,11 @@ const teams = {
     ]
   }
 }
+const API_BASE = window.location.protocol + '//' + window.location.host;
 let currentTeam = null;
 let currentQuestion = 0;
+let serverMode = false; // true when logged in against the server
+let teamPollId = null;
 
 const loginForm = document.getElementById("login-form");
 const loginError = document.getElementById("login-error");
@@ -228,19 +231,68 @@ const answerForm = document.getElementById("answer-form");
 const answerInput = document.getElementById("answer");
 
 // ===== TEAM LOGIN =====
-loginForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const teamName = document.getElementById("teamName").value.trim();
-    const password = document.getElementById("password").value.trim();
+loginForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const teamName = document.getElementById("teamName").value.trim();
+  const password = document.getElementById("password").value.trim();
 
-    if (teams[teamName] && teams[teamName].password === password) {
-        currentTeam = teamName;
-        loginContainer.classList.add("hidden");
-        huntContainer.classList.remove("hidden");
-        showQuestion();
-    } else {
-        loginError.textContent = "❌ Invalid team name or password!";
+  // Try server-side login first (supports admin login). Fall back to local data if server unreachable.
+    try {
+    const res = await fetch(API_BASE + '/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ team: teamName, password: password })
+    });
+    const data = await res.json();
+    if (data && data.status === 'admin') {
+      // admin authenticated — go to admin panel
+      window.location.href = API_BASE + '/admin.html';
+      return;
     }
+    if (data && data.status === 'eliminated') {
+      // team eliminated — redirect to eliminated page
+      window.location.href = API_BASE + '/eliminated.html';
+      return;
+    }
+    if (data && data.status === 'ok') {
+      // team login accepted by server — proceed with local UI (questions still come from JS file)
+      currentTeam = teamName;
+      serverMode = true;
+      loginContainer.classList.add("hidden");
+      huntContainer.classList.remove("hidden");
+      showQuestion();
+      // start polling server for team state (elimination) every 2s
+      if (!teamPollId) teamPollId = setInterval(async () => {
+        try {
+          const r = await fetch(`${API_BASE}/teams?cache=${Date.now()}`);
+          if (!r.ok) return;
+          const all = await r.json();
+          const info = all && all[currentTeam];
+          if (info && info.eliminated) {
+            // redirect to eliminated page
+            window.location.href = API_BASE + '/eliminated.html';
+          }
+        } catch (e) {
+          // ignore transient errors
+        }
+      }, 2000);
+      return;
+    }
+    // otherwise fall through to local check
+  } catch (err) {
+    // server unreachable — try local fallback below
+    console.warn('Server login failed, falling back to local teams list', err);
+  }
+
+  // Local fallback (offline mode)
+  if (teams[teamName] && teams[teamName].password === password) {
+    currentTeam = teamName;
+    loginContainer.classList.add("hidden");
+    huntContainer.classList.remove("hidden");
+    showQuestion();
+  } else {
+    loginError.textContent = "❌ Invalid team name or password!";
+  }
 });
 
 function showQuestion() {
@@ -302,13 +354,42 @@ answerForm.addEventListener("submit", (e) => {
 
     if (validKeys.includes(answer)) {
         feedback.textContent = "✅ Correct!";
-        currentQuestion++;
-        if (currentQuestion < teams[currentTeam].questions.length) {
-            showQuestion();
-        } else {
-            questionDisplay.innerHTML = "<p>🎉 You’ve completed all your questions!</p>";
-            answerForm.style.display = "none";
+    // send answer to server if in serverMode
+    const answeredQuestion = currentQuestion + 1;
+    (async () => {
+      if (serverMode && currentTeam) {
+        try {
+          const res = await fetch(`${API_BASE}/submit_answer`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ team: currentTeam, question: answeredQuestion, answer: answer, correct: true })
+          });
+          if (res.status === 403) {
+            // eliminated
+            window.location.href = API_BASE + '/eliminated.html';
+            return;
+          }
+        } catch (e) {
+          console.warn('Failed to POST answer to server', e);
         }
+        // update question on server
+        try {
+          await fetch(`${API_BASE}/update_question`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ team: currentTeam, question: answeredQuestion + 1 })
+          });
+        } catch (e) {
+          console.warn('Failed to update question on server', e);
+        }
+      }
+
+      currentQuestion++;
+      if (currentQuestion < teams[currentTeam].questions.length) {
+        showQuestion();
+      } else {
+        questionDisplay.innerHTML = "<p>🎉 You’ve completed all your questions!</p>";
+        answerForm.style.display = "none";
+      }
+    })();
     } else {
         feedback.textContent = "❌ Wrong key. Try again!";
     }

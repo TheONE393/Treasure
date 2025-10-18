@@ -1,5 +1,5 @@
 {
-  // Suggest using the project's virtual environment. After creating it, select it from the interpreter selector.
-  "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
-  "python.venvPath": "${workspaceFolder}\\.venv"
+  // Prefer the system Python on PATH so this repo can be moved without depending on a workspace venv.
+  // If you want a project venv later, create .venv/ and select it with the interpreter selector.
+  "python.defaultInterpreterPath": "python"
 }

@@ -256,7 +256,11 @@ def team_login():
     data = request.get_json() or {}
     team = data.get('team', '')
     password = data.get('password', '')
-    
+    # special-case admin login using environment variable ADMIN_PASSWORD
+    admin_pw = os.environ.get('ADMIN_PASSWORD')
+    if team == 'admin' and admin_pw and password == admin_pw:
+        return jsonify(status='admin')
+
     if team and team in teams and teams[team].get('password') == password:
         teams.setdefault(team, {})
         # If the team was eliminated for this server session, reject login
@@ -284,8 +288,19 @@ def get_ip_address():
     finally:
         s.close()
     return IP
+INIT_DONE = False
 
-if __name__ == '__main__':
+def safe_init():
+    """Perform one-time startup cleanup and reset.
+
+    This is guarded so importing `app` (for gunicorn) doesn't repeatedly
+    run the cleanup when workers are spawned.
+    """
+    global INIT_DONE
+    if INIT_DONE:
+        return
+    INIT_DONE = True
+
     # Reset all team times and questions when server starts
     teams = load_teams()
     for team in teams:
@@ -315,6 +330,12 @@ if __name__ == '__main__':
     except Exception:
         pass
 
+
+# run initialization now so importing the module (e.g. by gunicorn) performs the startup reset
+safe_init()
+
+
+if __name__ == '__main__':
     host = get_ip_address()
     port = int(os.environ.get('PORT', 8080))   # read PORT env var if present
     print(f"\n=== Treasure Hunt Server ===")

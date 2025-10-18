@@ -27,7 +27,8 @@
         "keys": []
       }
     ],
-    "currentQuestion": 1
+    "currentQuestion": 1,
+    "eliminatedAt": 1760783793
   },
   "Team 2": {
     "password": "bio101",

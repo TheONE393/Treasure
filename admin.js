@@ -79,9 +79,11 @@ function renderTable() {
         const tr = document.createElement("tr");
 
         // Team
-        const tdName = document.createElement("td");
-        tdName.textContent = team;
-        tdName.setAttribute("data-label", "Team");
+    const tdName = document.createElement("td");
+    tdName.textContent = team;
+    tdName.setAttribute("data-label", "Team");
+    // store canonical team name for reliable DOM lookups
+    tdName.dataset.team = team;
 
         // Current Question (fallback to 1)
         const tdQ = document.createElement("td");
@@ -161,13 +163,13 @@ function renderTable() {
         const dropdownMenu = document.createElement('div');
         dropdownMenu.classList.add('action-menu');
 
-        const skipOpt = document.createElement('button');
+    const skipOpt = document.createElement('button');
         skipOpt.textContent = 'Skip question';
         skipOpt.classList.add('small-btn');
         skipOpt.addEventListener('click', async () => {
             if (!confirm(`Skip current question for ${team}?`)) return;
             try {
-                const r = await fetch('http://localhost:8080/skip_question', {
+                const r = await fetch(API_BASE + '/skip_question', {
                     method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({team: team})
                 });
                 if (!r.ok) throw new Error('skip failed');
@@ -175,13 +177,13 @@ function renderTable() {
             } catch (e) { console.error(e); alert('Skip failed'); }
         });
 
-        const pauseOpt = document.createElement('button');
+    const pauseOpt = document.createElement('button');
         pauseOpt.textContent = info.pauseStart ? 'Resume timer' : 'Pause timer';
         pauseOpt.classList.add('small-btn');
         pauseOpt.addEventListener('click', async () => {
             try {
                 const action = info.pauseStart ? 'resume' : 'pause';
-                const r = await fetch('http://localhost:8080/pause_timer', {
+                const r = await fetch(API_BASE + '/pause_timer', {
                     method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({team: team, action: action})
                 });
                 if (!r.ok) throw new Error('pause failed');
@@ -238,6 +240,27 @@ function renderTable() {
             }
         }
     });
+
+    // After rendering the table, refresh any open answers panels so they show live updates
+    openAnswerTeams.forEach(team => {
+        // fetch and re-render answers for teams that have the answers panel open
+        fetchAndCacheAnswers(team).then(data => {
+            try {
+                // find the row for this team and re-insert the answers row under it
+                const rows = Array.from(document.querySelectorAll('#team-table tr'));
+                for (let i = 0; i < rows.length; i++) {
+                    const r = rows[i];
+                    const nameCell = r.querySelector && r.querySelector('td[data-team]');
+                    if (nameCell && nameCell.dataset && nameCell.dataset.team === team) {
+                        insertAnswersRow(r, data);
+                        break;
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to refresh answers panel for', team, e);
+            }
+        }).catch(err => console.warn('Failed to refresh answers for', team, err));
+    });
 }
 
 // Fetch a specific team's answers and display as a small details row under the team row
@@ -245,7 +268,7 @@ function renderTable() {
 // `forceOpen` when true will ensure the details row is inserted and not toggled closed.
 // fetch answers from server and cache them for the team
 async function fetchAndCacheAnswers(team) {
-    const resp = await fetch(`http://localhost:8080/answers?team=${encodeURIComponent(team)}&cache=${Date.now()}`);
+    const resp = await fetch(`${API_BASE}/answers?team=${encodeURIComponent(team)}&cache=${Date.now()}`);
     if (!resp.ok) throw new Error('Failed to fetch answers');
     const data = await resp.json();
     openAnswerData[team] = data || [];
@@ -254,11 +277,10 @@ async function fetchAndCacheAnswers(team) {
 
 // insert a details row with `data` under `row` (synchronous DOM op)
 function insertAnswersRow(row, data) {
-    // remove any existing details row first
+    // remove any existing details row first so we can replace it with fresh content
     const next = row.nextSibling;
     if (next && next.classList && next.classList.contains('answers-row')) {
-        // already present
-        return;
+        next.remove();
     }
     const detailsTr = document.createElement('tr');
     detailsTr.classList.add('answers-row');
@@ -291,17 +313,20 @@ function formatTime(s){
     return h + 'h ' + m + 'm ' + sec + 's';
 }
 
-// Start with an immediate fetch, then refresh every second
+// Start with an immediate fetch, then refresh every second (single interval)
 fetchTeams();
-const intervalId = setInterval(fetchTeams, 1000);
+let intervalId = setInterval(fetchTeams, 1000);
 
-// Stop updates if page is hidden
+// Stop updates if page is hidden, and resume with a single interval when visible
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-        clearInterval(intervalId);
+        if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+        }
     } else {
         fetchTeams(); // immediate update when visible again
-        setInterval(fetchTeams, 1000);
+        if (!intervalId) intervalId = setInterval(fetchTeams, 1000);
     }
 });
 
