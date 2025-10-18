@@ -11,3 +11,19 @@ To deploy on Render:
 1. Create a new Web Service on Render and connect your GitHub repo.
 2. Select branch `main` (or `master` if you prefer) and deploy. Render will install requirements and run the Procfile.
 
+## Running locally
+
+Windows (PowerShell):
+
+Run the included script which installs requirements into your user site and starts the app:
+
+```powershell
+.\start_server.ps1
+```
+
+Linux / WSL:
+
+```bash
+./run_local.sh
+```
+
