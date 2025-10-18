@@ -1,29 +1,18 @@
+# Virtual environment
+.venv/
+
+# Python cache
 __pycache__/
 *.py[cod]
-*$py.class
 
-# Virtual environments
-.venv/
-venv/
-ENV/
-env/
-/.venv/
+# Local answers and runtime state
+answers/
+teams.json
 
-# VS Code
+# VS Code workspace settings
 .vscode/
 
 # OS files
-.DS_Store
 Thumbs.db
+.DS_Store
 
-# Logs
-*.log
-
-# Secrets / local data
-.env
-secrets.json
-teams.json
-answers/
-
-# Node
-node_modules/

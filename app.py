@@ -57,17 +57,18 @@ def _normalize_teams(teams):
 # serve static files (admin.html, script.js, etc.)
 @app.route('/')
 def index():
-    return send_from_directory('.', 'index.html')
+    # serve index from the repository base directory to avoid CWD issues
+    return send_from_directory(BASE_DIR, 'index.html')
 
 @app.route('/questions/<path:filename>')
 def serve_questions(filename):
-    return send_from_directory('questions', filename)
+    return send_from_directory(os.path.join(BASE_DIR, 'questions'), filename)
 
 @app.route('/<path:filename>')
 def static_files(filename):
     # serve whatever is in the folder
     if os.path.exists(os.path.join(BASE_DIR, filename)):
-        return send_from_directory('.', filename)
+        return send_from_directory(BASE_DIR, filename)
     return ('Not Found', 404)
 
 # API Endpoints

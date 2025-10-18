@@ -1,5 +1,7 @@
 let teamsData = {};
-let dataSource = 'http://localhost:8080/teams'; // indicates where data was loaded from
+// Use the page origin as the API base so the admin UI works when served by the Flask server
+const API_BASE = window.location.protocol + '//' + window.location.host;
+let dataSource = API_BASE + '/teams'; // indicates where data was loaded from
 // keep track of which teams have their answers panel open so refreshes can re-open them
 let openAnswerTeams = new Set();
 // keep track of which teams have their action dropdown open so polling doesn't close them
@@ -109,7 +111,7 @@ function renderTable() {
         eliminateBtn.addEventListener('click', async () => {
             if (!confirm(`Permanently eliminate time for ${team} for the current server session? This cannot be undone until the server is restarted.`)) return;
             try {
-                const res = await fetch('http://localhost:8080/eliminate', {
+                const res = await fetch(API_BASE + '/eliminate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ team: team })
@@ -121,6 +123,26 @@ function renderTable() {
                 alert('Failed to eliminate time. Please try again.');
             }
         });
+
+        // If team is already eliminated for this server session, render a persistent badge and disable the button
+        if (info && info.eliminated) {
+            // create badge next to the team name (append later to the name cell)
+            const badge = document.createElement('span');
+            badge.textContent = 'Eliminated';
+            badge.classList.add('eliminated-badge');
+            badge.style.marginLeft = '8px';
+            badge.style.color = '#fff';
+            badge.style.background = '#d9534f';
+            badge.style.padding = '2px 6px';
+            badge.style.borderRadius = '4px';
+            badge.style.fontSize = '0.8em';
+            // disable the button and change its text so it doesn't flash during polls
+            eliminateBtn.disabled = true;
+            eliminateBtn.textContent = 'Eliminated';
+            eliminateBtn.classList.add('disabled');
+            // append badge to the team name cell later (we'll attach it after tdName is available)
+            tdName && tdName.appendChild && tdName.appendChild(badge);
+        }
         tdActions.appendChild(eliminateBtn);
 
         // Dropdown for extra admin actions (Skip / Pause)

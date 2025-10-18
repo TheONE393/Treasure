@@ -14,6 +14,7 @@ This script prints git output and returns non-zero on fatal errors.
 import subprocess
 import sys
 import datetime
+import os
 
 
 def run(cmd):
@@ -27,6 +28,11 @@ def run(cmd):
 
 
 def main():
+    # Ensure we run git commands from the script's containing directory so the
+    # script can be moved into other repos without breaking (avoids nested gitlink issues).
+    repo_dir = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(repo_dir)
+
     # check we are in a git repo
     res = run(["git", "rev-parse", "--is-inside-work-tree"])
     if res.returncode != 0:
@@ -63,8 +69,18 @@ def main():
             print("git commit failed. Aborting.")
             return 5
 
-    # push to origin
-    res = run(["git", "push", "-u", "origin", branch])
+    # push to origin (allow disabling push via env var GITPUSH_DRY_RUN=1)
+    if os.environ.get('GITPUSH_DRY_RUN'):
+        print("GITPUSH_DRY_RUN set — skipping actual git push.")
+    else:
+        res = run(["git", "push", "-u", "origin", branch])
+        if res.returncode != 0:
+            # detect nested repo warning in stderr/stdout and print guidance
+            out = (res.stdout or "") + (res.stderr or "")
+            if 'adding embedded git repository' in out.lower() or 'submodule' in out.lower():
+                print("Warning: repository contains nested git data (gitlink). If you moved this folder into another git repo, consider removing embedded .git directories or using .gitmodules if intended.")
+            print("git push failed.")
+            return 6
     if res.returncode != 0:
         print("git push failed.")
         return 6
