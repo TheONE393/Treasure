@@ -3,4 +3,9 @@
     "password": "REDACTED",
     "questions": []
   }
+  ,
+  "admin": {
+    "password": "adminpass",
+    "questions": []
+  }
 }

@@ -221,5 +221,10 @@
       }
     ],
     "currentQuestion": 1
+  },
+  "admin": {
+    "password": "adminpass",
+    "questions": [],
+    "currentQuestion": 1
   }
 }

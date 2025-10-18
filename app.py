@@ -256,10 +256,16 @@ def team_login():
     data = request.get_json() or {}
     team = data.get('team', '')
     password = data.get('password', '')
-    # special-case admin login using environment variable ADMIN_PASSWORD
-    admin_pw = os.environ.get('ADMIN_PASSWORD')
-    if team == 'admin' and admin_pw and password == admin_pw:
-        return jsonify(status='admin')
+    # special-case admin login: prefer `admin` password stored in teams.json, fall back to ADMIN_PASSWORD env var
+    if team == 'admin':
+        admin_entry_pw = None
+        if 'admin' in teams and isinstance(teams['admin'], dict):
+            admin_entry_pw = teams['admin'].get('password')
+        admin_pw_env = os.environ.get('ADMIN_PASSWORD')
+        if admin_entry_pw and password == admin_entry_pw:
+            return jsonify(status='admin')
+        if admin_pw_env and password == admin_pw_env:
+            return jsonify(status='admin')
 
     if team and team in teams and teams[team].get('password') == password:
         teams.setdefault(team, {})
