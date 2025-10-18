@@ -92,112 +92,9 @@ def load_team_data(csv_file, question_bank):
 
     return teams
 
-# ==== BUILD JS ====
-def build_js(teams_dict):
-    js_header = "// Auto-generated Treasure Hunt script (text + image questions)\nconst teams = "
-    js_content = json.dumps(teams_dict, indent=2)
-    js_footer = """
-let currentTeam = null;
-let currentQuestion = 0;
-
-const loginForm = document.getElementById("login-form");
-const loginError = document.getElementById("login-error");
-const huntContainer = document.getElementById("hunt-container");
-const loginContainer = document.getElementById("login-container");
-const teamTitle = document.getElementById("team-title");
-const questionDisplay = document.getElementById("question-display");
-const feedback = document.getElementById("feedback");
-const answerForm = document.getElementById("answer-form");
-const answerInput = document.getElementById("answer");
-
-// ===== TEAM LOGIN =====
-loginForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const teamName = document.getElementById("teamName").value.trim();
-    const password = document.getElementById("password").value.trim();
-
-    if (teams[teamName] && teams[teamName].password === password) {
-        currentTeam = teamName;
-        loginContainer.classList.add("hidden");
-        huntContainer.classList.remove("hidden");
-        showQuestion();
-    } else {
-        loginError.textContent = "❌ Invalid team name or password!";
-    }
-});
-
-function showQuestion() {
-    const qData = teams[currentTeam].questions[currentQuestion];
-    const qDisplay = document.getElementById("question-display");
-
-    // Update team title
-    teamTitle.textContent = `${currentTeam}, Question ${currentQuestion + 1}`;
-
-        // Clear previous question
-        qDisplay.innerHTML = "";
-        // Determine type: prefer explicit qData.type, otherwise infer from extension
-        let type = (qData.type || '').toString().toLowerCase();
-        const src = qData.q || '';
-        if (!type) {
-            if (src.match(/\.(mp4|webm|ogg)$/i)) type = 'video';
-            else if (src.match(/\.(gif)$/i)) type = 'gif';
-            else if (src.match(/\.(jpg|jpeg|png|bmp|svg)$/i)) type = 'image';
-            else type = 'text';
-        }
-
-        if (type === 'image' || type === 'gif') {
-            const img = document.createElement('img');
-            img.src = src;
-            img.alt = `Question ${currentQuestion + 1}`;
-            img.style.maxWidth = '100%';
-            img.style.height = 'auto';
-            qDisplay.appendChild(img);
-        } else if (type === 'video') {
-            const video = document.createElement('video');
-            video.src = src;
-            video.controls = true;
-            video.preload = 'metadata';
-            video.style.maxWidth = '100%';
-            video.style.height = 'auto';
-            video.innerHTML = 'Your browser does not support the video tag.';
-            qDisplay.appendChild(video);
-        } else {
-            const p = document.createElement('p');
-            p.textContent = qData.q || '';
-            qDisplay.appendChild(p);
-        }
-
-    // Reset input and feedback
-    answerInput.value = "";
-    feedback.textContent = "";
-
-    // Apply fade-in animation
-    qDisplay.classList.remove("fade-in"); // reset animation
-    void qDisplay.offsetWidth; // trigger reflow
-    qDisplay.classList.add("fade-in");
-}
-
-answerForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const qData = teams[currentTeam].questions[currentQuestion];
-    const answer = answerInput.value.trim().toLowerCase();
-    const validKeys = qData.keys.map(k => k.toLowerCase());
-
-    if (validKeys.includes(answer)) {
-        feedback.textContent = "✅ Correct!";
-        currentQuestion++;
-        if (currentQuestion < teams[currentTeam].questions.length) {
-            showQuestion();
-        } else {
-            questionDisplay.innerHTML = "<p>🎉 You’ve completed all your questions!</p>";
-            answerForm.style.display = "none";
-        }
-    } else {
-        feedback.textContent = "❌ Wrong key. Try again!";
-    }
-});
-"""
-    return js_header + js_content + js_footer
+# ==== EXPORT ONLY JSON ====
+def build_json(teams_dict):
+    return json.dumps(teams_dict, indent=2)
 
 # ==== MAIN ====
 def main():
@@ -208,15 +105,9 @@ def main():
 
     teams_dict = load_team_data(csv_file, question_bank)
 
-    # ---- EXPORT JS ----
-    js_code = build_js(teams_dict)
-    with open(output_js, "w", encoding="utf-8") as f:
-        f.write(js_code)
-    print("✅ script.js generated successfully!")
-
     # ---- EXPORT JSON ----
     with open(output_json, "w", encoding="utf-8") as f:
-        json.dump(teams_dict, f, indent=2)
+        f.write(build_json(teams_dict))
     print(f"✅ teams.json generated successfully!")
 
 if __name__ == "__main__":

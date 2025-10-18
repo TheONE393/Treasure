@@ -1,219 +1,22 @@
-// Auto-generated Treasure Hunt script (text + image questions)
-const teams = {
-  "Team 1": {
-    "password": "bio100",
-    "questions": [
-      {
-        "q": "What is mitochondria?",
-        "keys": [
-          "Cell",
-          "Ram",
-          "Molecule"
-        ]
-      },
-      {
-        "q": "questions/Q2.png",
-        "keys": [
-          "HRX",
-          "CVB",
-          "IMP"
-        ]
-      },
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      }
-    ]
-  },
-  "Team 2": {
-    "password": "bio101",
-    "questions": [
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      }
-    ]
-  },
-  "Team 3": {
-    "password": "bio102",
-    "questions": [
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      }
-    ]
-  },
-  "Team 4": {
-    "password": "bio103",
-    "questions": [
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      }
-    ]
-  },
-  "Team 5": {
-    "password": "bio104",
-    "questions": [
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "What is mitochondria?",
-        "keys": [
-          "Cell",
-          "Ram",
-          "Molecule"
-        ]
-      },
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      }
-    ]
-  },
-  "Team 6": {
-    "password": "bio105",
-    "questions": [
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "questions/Q2.png",
-        "keys": [
-          "HRX",
-          "CVB",
-          "IMP"
-        ]
-      },
-      {
-        "q": "",
-        "keys": []
-      }
-    ]
-  },
-  "Team 7": {
-    "password": "bio106",
-    "questions": [
-      {
-        "q": "questions/Q2.png",
-        "keys": [
-          "HRX",
-          "CVB",
-          "IMP"
-        ]
-      },
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      }
-    ]
-  },
-  "Team 8": {
-    "password": "bio107",
-    "questions": [
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      }
-    ]
-  },
-  "Team 9": {
-    "password": "bio108",
-    "questions": [
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "",
-        "keys": []
-      },
-      {
-        "q": "What is mitochondria?",
-        "keys": [
-          "Cell",
-          "Ram",
-          "Molecule"
-        ]
-      }
-    ]
+// teams are now loaded from teams.json (server / local) — removed embedded team data to avoid duplication
+let teams = {};
+
+// load local teams.json as a fallback (used when server is unreachable)
+async function loadLocalTeams() {
+  try {
+    const resp = await fetch('teams.json?cache=' + Date.now(), { cache: 'no-store' });
+    if (resp.ok) {
+      teams = await resp.json();
+      return teams;
+    }
+  } catch (e) {
+    console.warn('Failed to fetch local teams.json', e);
   }
+  teams = {};
+  return teams;
 }
+// start loading local teams immediately so offline fallback is available
+const teamsLoaded = loadLocalTeams();
 const API_BASE = window.location.protocol + '//' + window.location.host;
 let currentTeam = null;
 let currentQuestion = 0;
@@ -260,6 +63,19 @@ loginForm.addEventListener("submit", async (e) => {
       serverMode = true;
       loginContainer.classList.add("hidden");
       huntContainer.classList.remove("hidden");
+      // load teams from server so we have question definitions and state
+      try {
+        const rt = await fetch(`${API_BASE}/teams?cache=${Date.now()}`);
+        if (rt.ok) {
+          const parsed = await rt.json();
+          teams = parsed || teams;
+        } else {
+          // fallback to local teams.json if server /teams fails
+          await teamsLoaded;
+        }
+      } catch (e) {
+        await teamsLoaded;
+      }
       showQuestion();
       // start polling server for team state (elimination) every 2s
       if (!teamPollId) teamPollId = setInterval(async () => {
@@ -285,7 +101,8 @@ loginForm.addEventListener("submit", async (e) => {
   }
 
   // Local fallback (offline mode)
-  if (teams[teamName] && teams[teamName].password === password) {
+  await teamsLoaded;
+  if (teams && teams[teamName] && teams[teamName].password === password) {
     currentTeam = teamName;
     loginContainer.classList.add("hidden");
     huntContainer.classList.remove("hidden");
@@ -296,7 +113,13 @@ loginForm.addEventListener("submit", async (e) => {
 });
 
 function showQuestion() {
-    const qData = teams[currentTeam].questions[currentQuestion];
+  // defensive: ensure teams and current team exist
+  if (!teams || !currentTeam || !teams[currentTeam]) {
+    questionDisplay.innerHTML = "<p>No question data available.</p>";
+    return;
+  }
+  const teamObj = teams[currentTeam];
+  const qData = (teamObj.questions && teamObj.questions[currentQuestion]) || { q: '', keys: [] };
     const qDisplay = document.getElementById("question-display");
 
     // Update team title
