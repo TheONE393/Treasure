@@ -1,7 +1,11 @@
 let teamsData = {};
-// Use the page origin as the API base so the admin UI works when served by the Flask server
-const API_BASE = window.location.protocol + '//' + window.location.host;
+// Use the page origin as the default API base so the admin UI works when served by the Flask server
+let API_BASE = window.location.protocol + '//' + window.location.host;
+// allow overriding the API host (useful when admin.html is hosted on GitHub Pages)
+let overrideApiInput = null;
+let connectBtn = null;
 let dataSource = API_BASE + '/teams'; // indicates where data was loaded from
+let backendReachable = false; // whether API_BASE is reachable for POST actions
 // keep track of which teams have their answers panel open so refreshes can re-open them
 let openAnswerTeams = new Set();
 // keep track of which teams have their action dropdown open so polling doesn't close them
@@ -23,6 +27,9 @@ async function fetchTeams() {
             try {
                 data = JSON.parse(text);
                 teamsData = data || {};
+                // if we successfully fetched from dataSource and it's not the static teams.json, backend is reachable
+                backendReachable = dataSource !== 'teams.json';
+                updateConnectionIndicator();
                 renderTable();
                 console.log('Fetched teams, count=', Object.keys(teamsData).length);
             } catch (e) {
@@ -49,6 +56,33 @@ async function fetchTeams() {
         console.error("Error fetching teams", e);
         const tbody = document.getElementById('team-table');
         if (tbody) tbody.innerHTML = '<tr><td colspan="4">Error loading teams</td></tr>';
+        // mark backend unreachable so action buttons are disabled
+        backendReachable = false;
+        updateConnectionIndicator();
+    }
+}
+
+// Try to ping the backend API base to see if action endpoints are reachable
+async function testBackendConnection() {
+    // Attempt to call /teams without cache to check connectivity
+    try {
+        const resp = await fetch((API_BASE || '') + '/teams?cache=' + Date.now(), { cache: 'no-store', mode: 'cors' });
+        backendReachable = resp.ok;
+    } catch (e) {
+        backendReachable = false;
+    }
+    updateConnectionIndicator();
+}
+
+function updateConnectionIndicator() {
+    const note = document.getElementById('connection-note');
+    if (!note) return;
+    if (backendReachable) {
+        note.textContent = '✓ Connected to backend: ' + (API_BASE || '') + ' - Auto-updating every second';
+        note.style.background = '#4CAF50';
+    } else {
+        note.textContent = '⚠️ No backend reachable. Controls are disabled. Using static teams.json if available.';
+        note.style.background = '#d9534f';
     }
 }
 
@@ -63,14 +97,22 @@ function renderTable() {
         return;
     }
 
-    // Connect indicator
+    // Connection indicator row (reflect whether backend is reachable)
     const noteTr = document.createElement('tr');
     const noteTd = document.createElement('td');
     noteTd.colSpan = 4;
-    noteTd.style.background = '#4CAF50';
     noteTd.style.color = 'white';
     noteTd.style.fontSize = '0.9em';
-    noteTd.textContent = '✓ Connected to server - Auto-updating every second';
+    if (backendReachable) {
+        noteTd.style.background = '#4CAF50';
+        noteTd.textContent = `✓ Connected to backend: ${API_BASE} - Auto-updating every second`;
+    } else if (dataSource === 'teams.json') {
+        noteTd.style.background = '#f0ad4e';
+        noteTd.textContent = 'Using local teams.json (read-only) - actions disabled';
+    } else {
+        noteTd.style.background = '#d9534f';
+        noteTd.textContent = '⚠️ No backend reachable. Controls are disabled.';
+    }
     noteTr.appendChild(noteTd);
     tbody.appendChild(noteTr);
 
@@ -111,6 +153,7 @@ function renderTable() {
         eliminateBtn.textContent = '�️ Eliminate';
         eliminateBtn.classList.add('action-btn','danger');
         eliminateBtn.addEventListener('click', async () => {
+            if (!backendReachable) { alert('Backend not reachable — cannot perform eliminate.'); return; }
             if (!confirm(`Permanently eliminate time for ${team} for the current server session? This cannot be undone until the server is restarted.`)) return;
             try {
                 const res = await fetch(API_BASE + '/eliminate', {
@@ -126,7 +169,7 @@ function renderTable() {
             }
         });
 
-        // If team is already eliminated for this server session, render a persistent badge and disable the button
+    // If team is already eliminated for this server session, render a persistent badge and disable the button
         if (info && info.eliminated) {
             // create badge next to the team name (append later to the name cell)
             const badge = document.createElement('span');
@@ -144,6 +187,11 @@ function renderTable() {
             eliminateBtn.classList.add('disabled');
             // append badge to the team name cell later (we'll attach it after tdName is available)
             tdName && tdName.appendChild && tdName.appendChild(badge);
+        }
+        // disable eliminate if backend not reachable and not already eliminated
+        if (!backendReachable && !(info && info.eliminated)) {
+            eliminateBtn.disabled = true;
+            eliminateBtn.classList.add('disabled');
         }
         tdActions.appendChild(eliminateBtn);
 
@@ -163,10 +211,11 @@ function renderTable() {
         const dropdownMenu = document.createElement('div');
         dropdownMenu.classList.add('action-menu');
 
-    const skipOpt = document.createElement('button');
+        const skipOpt = document.createElement('button');
         skipOpt.textContent = 'Skip question';
         skipOpt.classList.add('small-btn');
         skipOpt.addEventListener('click', async () => {
+            if (!backendReachable) { alert('Backend not reachable — cannot skip question.'); return; }
             if (!confirm(`Skip current question for ${team}?`)) return;
             try {
                 const r = await fetch(API_BASE + '/skip_question', {
@@ -177,10 +226,11 @@ function renderTable() {
             } catch (e) { console.error(e); alert('Skip failed'); }
         });
 
-    const pauseOpt = document.createElement('button');
+        const pauseOpt = document.createElement('button');
         pauseOpt.textContent = info.pauseStart ? 'Resume timer' : 'Pause timer';
         pauseOpt.classList.add('small-btn');
         pauseOpt.addEventListener('click', async () => {
+            if (!backendReachable) { alert('Backend not reachable — cannot pause/resume.'); return; }
             try {
                 const action = info.pauseStart ? 'resume' : 'pause';
                 const r = await fetch(API_BASE + '/pause_timer', {
@@ -195,6 +245,15 @@ function renderTable() {
         dropdownMenu.appendChild(pauseOpt);
         dropdownWrap.appendChild(ddBtn);
         dropdownWrap.appendChild(dropdownMenu);
+        // disable dropdown buttons if backend unreachable
+        if (!backendReachable) {
+            skipOpt.disabled = true;
+            skipOpt.classList.add('disabled');
+            pauseOpt.disabled = true;
+            pauseOpt.classList.add('disabled');
+            ddBtn.disabled = true;
+            ddBtn.classList.add('disabled');
+        }
         tdActions.appendChild(dropdownWrap);
 
         // If this team's dropdown was open previously, restore its open state after render
@@ -208,6 +267,7 @@ function renderTable() {
     viewBtn.classList.add('action-btn');
         viewBtn.addEventListener('click', () => {
             // toggle in-memory state and then open/close accordingly
+            if (!backendReachable) { alert('Backend not reachable — cannot view answers.'); return; }
             if (openAnswerTeams.has(team)) {
                 openAnswerTeams.delete(team);
                 delete openAnswerData[team];
@@ -222,6 +282,10 @@ function renderTable() {
                 }).catch(err => console.error('Failed to fetch answers', err));
             }
         });
+        if (!backendReachable) {
+            viewBtn.disabled = true;
+            viewBtn.classList.add('disabled');
+        }
         tdActions.appendChild(viewBtn);
 
         tr.appendChild(tdName);
@@ -233,7 +297,10 @@ function renderTable() {
         // If this team's answers panel was previously opened, reopen it after inserting the row
         if (openAnswerTeams.has(team)) {
             // If we have cached answers render them synchronously; otherwise fetch then render
-            if (openAnswerData[team]) {
+            if (!backendReachable) {
+                // cannot refresh answers if backend unreachable; show placeholder
+                insertAnswersRow(tr, []);
+            } else if (openAnswerData[team]) {
                 insertAnswersRow(tr, openAnswerData[team]);
             } else {
                 fetchAndCacheAnswers(team).then(data => insertAnswersRow(tr, data)).catch(err => console.error('Failed to reopen answers for', team, err));
@@ -314,8 +381,49 @@ function formatTime(s){
 }
 
 // Start with an immediate fetch, then refresh every second (single interval)
-fetchTeams();
-let intervalId = setInterval(fetchTeams, 1000);
+// Wire up override input and connect button if present
+document.addEventListener('DOMContentLoaded', () => {
+    overrideApiInput = document.getElementById('api-override');
+    connectBtn = document.getElementById('api-connect');
+    const note = document.getElementById('connection-note');
+    if (note) note.textContent = 'Checking backend...';
+    // if an api query param is present, auto-fill and connect
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const apiParam = params.get('api');
+        if (apiParam) {
+            API_BASE = apiParam.replace(/\/$/, '');
+            dataSource = API_BASE + '/teams';
+            if (overrideApiInput) overrideApiInput.value = API_BASE;
+        }
+    } catch (e) {
+        // ignore
+    }
+    if (connectBtn && overrideApiInput) {
+        connectBtn.addEventListener('click', () => {
+            const val = (overrideApiInput.value || '').trim();
+            if (val) {
+                // normalize to no trailing slash
+                API_BASE = val.replace(/\/$/, '');
+            } else {
+                API_BASE = window.location.protocol + '//' + window.location.host;
+            }
+            dataSource = API_BASE + '/teams';
+            testBackendConnection();
+            fetchTeams();
+        });
+    }
+    // initial test and fetch
+    testBackendConnection();
+    fetchTeams();
+});
+
+let intervalId = null;
+// create a polling interval after initial successful fetch
+function startPolling() {
+    if (!intervalId) intervalId = setInterval(fetchTeams, 1000);
+}
+startPolling();
 
 // Stop updates if page is hidden, and resume with a single interval when visible
 document.addEventListener('visibilitychange', () => {

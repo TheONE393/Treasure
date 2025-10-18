@@ -10,6 +10,11 @@
   <div class="container">
     <h1>Admin Dashboard</h1>
     <p>Monitor teams and reset times</p>
+    <div style="margin:10px 0; display:flex; gap:8px; align-items:center;">
+      <input id="api-override" type="text" placeholder="https://your-backend.example.com" style="flex:1; padding:6px;" />
+      <button id="api-connect" style="padding:6px 10px;">Connect</button>
+    </div>
+    <div id="connection-note" style="padding:6px; border-radius:4px; margin-bottom:8px; font-size:0.95em;"></div>
     <div class="table-wrap">
       <table>
     <thead>
