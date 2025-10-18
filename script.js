@@ -102,6 +102,13 @@ loginForm.addEventListener("submit", async (e) => {
 
   // Local fallback (offline mode)
   await teamsLoaded;
+  // If teams.json contains an admin entry and credentials match, redirect to admin panel
+  if (teamName === 'admin' && teams && teams[teamName] && teams[teamName].password === password) {
+    // Admin HTML is a static page on GitHub Pages — redirect there.
+    window.location.href = API_BASE + '/admin.html';
+    return;
+  }
+
   if (teams && teams[teamName] && teams[teamName].password === password) {
     currentTeam = teamName;
     loginContainer.classList.add("hidden");
