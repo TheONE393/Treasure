@@ -316,7 +316,7 @@ if __name__ == '__main__':
         pass
 
     host = get_ip_address()
-    port = 8080
+    port = int(os.environ.get('PORT', 8080))   # read PORT env var if present
     print(f"\n=== Treasure Hunt Server ===")
     print(f"Local URL: http://localhost:{port}")
     print(f"Network URL: http://{host}:{port}")

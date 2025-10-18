@@ -1,0 +1,5 @@
+{
+  // Suggest using the project's virtual environment. After creating it, select it from the interpreter selector.
+  "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+  "python.venvPath": "${workspaceFolder}\\.venv"
+}
